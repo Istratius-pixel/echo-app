@@ -1,13 +1,17 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
 export default function EchoContent() {
-  // Весь твой основной код приложения ECHO
   return (
-    <div style={{ padding: '20px', backgroundColor: '#111', color: '#fff', minHeight: '100vh' }}>
-      <h1>ECHO PWA</h1>
-      <p>Приложение готово к работе.</p>
-      {/* Если у тебя был специфический код кнопок или функций, вставь их сюда */}
-    </div>
+    <main style={{ padding: '20px', textAlign: 'center', backgroundColor: '#000', color: '#fff', minHeight: '100vh' }}>
+      <h1 style={{ fontSize: '3rem', marginTop: '20%' }}>ECHO</h1>
+      <p style={{ opacity: 0.7 }}>Quantum AI Interface Ready</p>
+      <button 
+        onClick={() => alert('Система активна!')}
+        style={{ padding: '10px 20px', marginTop: '20px', cursor: 'pointer', background: '#fff', color: '#000', border: 'none', borderRadius: '5px' }}
+      >
+        Инициализация
+      </button>
+    </main>
   );
 }
