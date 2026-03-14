@@ -1,5 +1,4 @@
 'use client';
-import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,17 +12,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "ECHO Istratius",
-  description: "Quantum AI Interface",
-  manifest: "/manifest.json", // Это подключит твой файл
-  themeColor: "#000000",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "ECHO",
-  },
-};
 export default function RootLayout({
   children,
 }: Readonly<{
