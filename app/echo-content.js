@@ -27,15 +27,15 @@ export default function EchoContent() {
     if (!audioContext.current) return;
     const osc = audioContext.current.createOscillator();
     const gain = audioContext.current.createGain();
-    osc.type = 'sawtooth'; // Более жесткий, техногенный звук
-    osc.frequency.setValueAtTime(1200, audioContext.current.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, audioContext.current.currentTime + 0.15);
-    gain.gain.setValueAtTime(0.05, audioContext.current.currentTime);
-    gain.gain.linearRampToValueAtTime(0, audioContext.current.currentTime + 0.15);
+    osc.type = 'square'; 
+    osc.frequency.setValueAtTime(1500, audioContext.current.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, audioContext.current.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.03, audioContext.current.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioContext.current.currentTime + 0.1);
     osc.connect(gain);
     gain.connect(audioContext.current.destination);
     osc.start();
-    osc.stop(audioContext.current.currentTime + 0.15);
+    osc.stop(audioContext.current.currentTime + 0.1);
   };
 
   const initParticles = useCallback(() => {
@@ -61,9 +61,8 @@ export default function EchoContent() {
     if (!isVoiceEnabled || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.5; // Ускоренный темп
-    utterance.pitch = 0.8; // Футуристичный низкий тон
-    utterance.volume = 1;
+    utterance.rate = 1.6; 
+    utterance.pitch = 0.75; 
     window.speechSynthesis.speak(utterance);
   };
 
@@ -95,10 +94,8 @@ export default function EchoContent() {
         p.vx *= 0.95; p.vy *= 0.95;
         const volEffect = status === 'recording' ? (smoothedVolume * SENSITIVITY) : 2;
         const targetDist = p.baseDist + volEffect;
-        const targetX = Math.cos(p.angle) * targetDist;
-        const targetY = Math.sin(p.angle) * targetDist;
-        p.x += (targetX - p.x) * 0.15 + p.vx;
-        p.y += (targetY - p.y) * 0.15 + p.vy;
+        p.x += (Math.cos(p.angle) * targetDist - p.x) * 0.15 + p.vx;
+        p.y += (Math.sin(p.angle) * targetDist - p.y) * 0.15 + p.vy;
         p.angle += (status === 'thinking' ? 0.15 : 0.008) + (smoothedVolume / 300);
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.opacity;
@@ -129,7 +126,7 @@ export default function EchoContent() {
       };
       mediaRecorder.current.start();
       setStatus('recording');
-    } catch (err) { setError("No mic access"); }
+    } catch (err) { setError("Mic access denied"); }
   };
 
   const sendToAI = async (blob) => {
@@ -152,24 +149,24 @@ export default function EchoContent() {
           messages: [
             { 
               role: "system", 
-              content: "Ты — ядро ECHO. Отвечай СТРОГО на языке пользователя. ОБА БЛОКА (СУТЬ и ДЕЙСТВИЕ) должны быть на языке запроса. Формат: 1. [СУТЬ] (макс 5 слов). 2. [ДЕЙСТВИЕ] (короткая директива)." 
+              content: "You are the ECHO core. Respond ALWAYS in the SAME language as the user. Format: 1. [ESSENCE] (max 5 words). 2. [ACTION] (short directive). No greetings, no intro." 
             }, 
             { role: "user", content: tData.text }
           ],
-          temperature: 0.4
+          temperature: 0.3
         })
       });
       const cData = await cRes.json();
       const ai = cData.choices[0].message.content;
       
-      const parts = ai.includes('2.') ? ai.split('2.') : [ai, "Ready."];
-      const essence = parts[0].replace('1.', '').trim();
+      const parts = ai.split(/2\./);
+      const essence = parts[0].replace(/1\./, '').trim();
       const action = parts[1]?.trim() || "Standing by.";
       
       setResult({ essence, action });
       setStatus('done');
       speak(action);
-    } catch (err) { setError("AI Error"); setStatus('ready'); }
+    } catch (err) { setError("AI Offline"); setStatus('ready'); }
   };
 
   return (
@@ -188,23 +185,23 @@ export default function EchoContent() {
       </header>
 
       <main className="flex-1 w-full max-w-md flex flex-col justify-center items-center relative">
-        {error && <div className="text-red-600 text-[10px] uppercase tracking-widest mb-4">{error}</div>}
+        {error && <div className="text-red-600 text-[10px] uppercase tracking-widest mb-4 font-bold">{error}</div>}
 
         {status === 'done' && result ? (
           <div className="w-full space-y-6 animate-in fade-in zoom-in duration-500">
              <div className="bg-red-950/10 border border-white/5 p-8 rounded-[3rem]">
-              <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold">Essence</h2>
-              <p className="text-xl font-light">{result.essence}</p>
+              <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold">Analysis</h2>
+              <p className="text-xl font-light tracking-tight">{result.essence}</p>
             </div>
             <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem]">
-              <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold">Action</h2>
-              <p className="text-xl font-light text-red-50/90">{result.action}</p>
+              <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold">Directive</h2>
+              <p className="text-xl font-light text-red-50/90 tracking-tight">{result.action}</p>
             </div>
             <button 
               onClick={() => { setResult(null); setStatus('ready'); window.speechSynthesis.cancel(); }} 
               className="w-full py-6 text-white/20 text-[9px] uppercase font-black tracking-[0.6em] hover:text-red-500 transition-all"
             >
-              [ New Session ]
+              [ Reset Core ]
             </button>
           </div>
         ) : (
@@ -215,7 +212,7 @@ export default function EchoContent() {
             <canvas ref={canvasRef} width={600} height={600} className="w-full h-full z-10" />
             <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-opacity duration-1000">
                 <p className="text-[10px] font-black uppercase tracking-[1em] text-white pointer-events-none text-center">
-                    {status === 'ready' ? 'Tap to initialize' : status === 'recording' ? 'Tap to finalize' : 'Processing...'}
+                    {status === 'ready' ? 'Initialize' : status === 'recording' ? 'Finalize' : 'Processing'}
                 </p>
                 <div className={`h-[1px] w-8 bg-red-600 mt-2 transition-all duration-500 ${status === 'recording' ? 'w-24' : 'w-8'}`} />
             </div>
