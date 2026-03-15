@@ -12,15 +12,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "ECHO Istratius",
-  description: "Quantum AI Interface",
-  manifest: "/manifest.json", // Это подключит твой файл
-  themeColor: "#000000",
+export const metadata = {
+  title: 'ECHO Istratius',
+  description: 'Adaptive AI Collaborator',
+  manifest: '/manifest.json',
+  icons: {
+    apple: '/icon-512.png',
+  },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
-    title: "ECHO",
+    statusBarStyle: 'black-translucent',
+    title: 'ECHO',
   },
 };
 export default function RootLayout({
