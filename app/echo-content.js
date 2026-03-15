@@ -203,7 +203,7 @@ export default function EchoContent() {
       </main>
 
       <footer className="py-8 text-center opacity-20">
-        <p className="text-[10px] font-black tracking-[0.6em] uppercase text-white">Istratius</p>
+        <p className="text-[10px] font-black tracking-[0.6em] uppercase text-white">© Istratius</p>
       </footer>
     </div>
   );
