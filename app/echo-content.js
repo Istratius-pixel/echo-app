@@ -23,20 +23,19 @@ export default function EchoContent() {
   const SENSITIVITY = 6.5; 
   const HAX_DRIFT = 2.2; 
 
-  // Футуристичный звук клика
   const playClickSound = () => {
     if (!audioContext.current) return;
     const osc = audioContext.current.createOscillator();
     const gain = audioContext.current.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, audioContext.current.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(110, audioContext.current.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.1, audioContext.current.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.current.currentTime + 0.1);
+    osc.type = 'sawtooth'; // Более жесткий, техногенный звук
+    osc.frequency.setValueAtTime(1200, audioContext.current.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioContext.current.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.05, audioContext.current.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioContext.current.currentTime + 0.15);
     osc.connect(gain);
     gain.connect(audioContext.current.destination);
     osc.start();
-    osc.stop(audioContext.current.currentTime + 0.1);
+    osc.stop(audioContext.current.currentTime + 0.15);
   };
 
   const initParticles = useCallback(() => {
@@ -46,8 +45,7 @@ export default function EchoContent() {
       particles.current.push({
         angle: angle,
         baseDist: Math.random() * 60 + 20, 
-        x: 0,
-        y: 0,
+        x: 0, y: 0,
         opacity: Math.random() * 0.7 + 0.1,
         size: 0.5 + Math.random() * 1.2,
         color: i % 10 === 0 ? WHITE_SPARK : CORE_COLOR,
@@ -63,8 +61,9 @@ export default function EchoContent() {
     if (!isVoiceEnabled || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.3;
-    utterance.pitch = 0.9; // Чуть более низкий, "системный" голос
+    utterance.rate = 1.5; // Ускоренный темп
+    utterance.pitch = 0.8; // Футуристичный низкий тон
+    utterance.volume = 1;
     window.speechSynthesis.speak(utterance);
   };
 
@@ -100,7 +99,7 @@ export default function EchoContent() {
         const targetY = Math.sin(p.angle) * targetDist;
         p.x += (targetX - p.x) * 0.15 + p.vx;
         p.y += (targetY - p.y) * 0.15 + p.vy;
-        p.angle += (status === 'thinking' ? 0.12 : 0.008) + (smoothedVolume / 350);
+        p.angle += (status === 'thinking' ? 0.15 : 0.008) + (smoothedVolume / 300);
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.opacity;
         ctx.fillRect(centerX + p.x, centerY + p.y, p.size, p.size);
@@ -149,21 +148,21 @@ export default function EchoContent() {
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama-3.1-8b-instant", // Сверхбыстрая модель
+          model: "llama-3.1-8b-instant",
           messages: [
             { 
               role: "system", 
-              content: "Ты — ядро ECHO. Отвечай СТРОГО на том же языке, на котором говорит пользователь. Формат: 1. [СУТЬ] (макс. 5 слов) 2. [ДЕЙСТВИЕ] (короткая директива). Без приветствий." 
+              content: "Ты — ядро ECHO. Отвечай СТРОГО на языке пользователя. ОБА БЛОКА (СУТЬ и ДЕЙСТВИЕ) должны быть на языке запроса. Формат: 1. [СУТЬ] (макс 5 слов). 2. [ДЕЙСТВИЕ] (короткая директива)." 
             }, 
             { role: "user", content: tData.text }
           ],
-          temperature: 0.5
+          temperature: 0.4
         })
       });
       const cData = await cRes.json();
       const ai = cData.choices[0].message.content;
       
-      const parts = ai.includes('2.') ? ai.split('2.') : [ai, "Standing by."];
+      const parts = ai.includes('2.') ? ai.split('2.') : [ai, "Ready."];
       const essence = parts[0].replace('1.', '').trim();
       const action = parts[1]?.trim() || "Standing by.";
       
