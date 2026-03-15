@@ -17,35 +17,30 @@ export default function EchoContent() {
   const animationFrameId = useRef(null);
   const particles = useRef([]);
 
-  // Конфигурация эффектов
-  const PARTICLE_COUNT = 450;
-  const CORE_COLOR = '#ff0000';
-  const WHITE_SPARK = '#ffffff';
-
   const playClickSound = () => {
     if (!audioContext.current) return;
     const osc = audioContext.current.createOscillator();
     const gain = audioContext.current.createGain();
     osc.type = 'square';
-    osc.frequency.setValueAtTime(1800, audioContext.current.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(10, audioContext.current.currentTime + 0.08);
+    osc.frequency.setValueAtTime(1200, audioContext.current.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(20, audioContext.current.currentTime + 0.1);
     gain.gain.setValueAtTime(0.04, audioContext.current.currentTime);
-    gain.gain.linearRampToValueAtTime(0, audioContext.current.currentTime + 0.08);
+    gain.gain.linearRampToValueAtTime(0, audioContext.current.currentTime + 0.1);
     osc.connect(gain);
     gain.connect(audioContext.current.destination);
     osc.start();
-    osc.stop(audioContext.current.currentTime + 0.08);
+    osc.stop(audioContext.current.currentTime + 0.1);
   };
 
   const initParticles = useCallback(() => {
     particles.current = [];
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    for (let i = 0; i < 450; i++) {
       const angle = Math.random() * Math.PI * 2;
       particles.current.push({
         angle, baseDist: Math.random() * 60 + 20, x: 0, y: 0,
         opacity: Math.random() * 0.7 + 0.1,
         size: 0.5 + Math.random() * 1.2,
-        color: i % 10 === 0 ? WHITE_SPARK : CORE_COLOR,
+        color: i % 10 === 0 ? '#ffffff' : '#ff0000',
         vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10
       });
     }
@@ -53,32 +48,26 @@ export default function EchoContent() {
 
   useEffect(() => { initParticles(); }, [initParticles]);
 
-  // СИСТЕМА ЭХО И ГОЛОСА
   const speak = (text) => {
     if (!isVoiceEnabled || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.4; 
-    utterance.pitch = 0.65; // Глубокий кибер-голос
+    utterance.rate = 1.3; 
+    utterance.pitch = 0.7; 
 
-    // Создаем эхо через Web Audio API
-    if (audioContext.current) {
-        // Мы используем захват аудиопотока браузера (если поддерживается)
-        // Но проще всего имитировать эхо через двойной запуск с задержкой
-        window.speechSynthesis.speak(utterance);
-        
-        // Второе "призрачное" сообщение для создания эффекта эха
-        setTimeout(() => {
-            if (isVoiceEnabled) {
-                const echo = new SpeechSynthesisUtterance(text);
-                echo.rate = 1.4;
-                echo.pitch = 0.5;
-                echo.volume = 0.2; // Эхо тише
-                window.speechSynthesis.speak(echo);
-            }
-        }, 180); // Задержка эха
-    }
+    window.speechSynthesis.speak(utterance);
+    
+    // Эффект призрачного эха
+    setTimeout(() => {
+        if (isVoiceEnabled) {
+            const echo = new SpeechSynthesisUtterance(text);
+            echo.rate = 1.3;
+            echo.pitch = 0.4;
+            echo.volume = 0.15;
+            window.speechSynthesis.speak(echo);
+        }
+    }, 150);
   };
 
   useEffect(() => {
@@ -141,7 +130,7 @@ export default function EchoContent() {
       };
       mediaRecorder.current.start();
       setStatus('recording');
-    } catch (err) { setError("Mic Error"); }
+    } catch (err) { setError("Mic access denied"); }
   };
 
   const sendToAI = async (blob) => {
@@ -164,24 +153,31 @@ export default function EchoContent() {
           messages: [
             { 
               role: "system", 
-              content: "You are ECHO core. Use ONLY the user's language. 1. [Analysis] (max 5 words) 2. [Directive] (max 10 words). Strict format." 
+              content: "You are the ECHO intelligence core. Your mission is to provide profound, sophisticated analysis. " +
+                       "1. Detect the user's language and respond EXCLUSIVELY in that language. " +
+                       "2. Format: [Analysis] <Deep insight about the user's thought, ~15 words>. " +
+                       "3. Format: [Directive] <Meaningful, high-level strategic advice, ~20 words>. " +
+                       "Avoid simple greetings. Be authoritative and cryptic." 
             }, 
             { role: "user", content: tData.text }
           ],
-          temperature: 0.1
+          temperature: 0.5
         })
       });
       const cData = await cRes.json();
       const ai = cData.choices[0].message.content;
       
-      const parts = ai.split(/2\./);
-      const essence = parts[0].replace(/1\./, '').trim();
-      const action = parts[1]?.trim() || "Standing by.";
+      // Более надежный парсинг
+      const essence = ai.match(/Analysis\](.*?)\[/s)?.[1] || ai.split('[Directive]')[0].replace('[Analysis]', '');
+      const action = ai.split('[Directive]')[1] || "Awaiting further synchronization.";
       
-      setResult({ essence, action });
+      setResult({ 
+        essence: essence.trim(), 
+        action: action.trim() 
+      });
       setStatus('done');
-      speak(action);
-    } catch (err) { setError("Offline"); setStatus('ready'); }
+      speak(action.trim());
+    } catch (err) { setError("System Synapse Failure"); setStatus('ready'); }
   };
 
   return (
@@ -201,30 +197,33 @@ export default function EchoContent() {
 
       <main className="flex-1 w-full max-w-md flex flex-col justify-center items-center relative">
         {status === 'done' && result ? (
-          <div className="w-full space-y-6 animate-in fade-in zoom-in duration-500">
-             <div className="bg-red-950/10 border border-white/5 p-8 rounded-[3rem]">
-              <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold">Analysis</h2>
-              <p className="text-xl font-light">{result.essence}</p>
+          <div className="w-full space-y-6 animate-in fade-in zoom-in duration-700">
+             <div className="bg-red-950/10 border border-white/5 p-8 rounded-[3rem] backdrop-blur-sm">
+              <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold italic">Deep Analysis</h2>
+              <p className="text-lg font-light leading-relaxed tracking-tight">{result.essence}</p>
             </div>
-            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem] relative overflow-hidden">
-              <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold">Directive</h2>
-              <p className="text-xl font-light text-red-50/90">{result.action}</p>
+            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem] relative overflow-hidden backdrop-blur-md">
+              <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold italic">Directive</h2>
+              <p className="text-lg font-light text-red-50/90 leading-relaxed tracking-tight">{result.action}</p>
               {isVoiceEnabled && <div className="absolute inset-0 bg-red-600/5 animate-pulse" />}
             </div>
-            <button onClick={() => { setResult(null); setStatus('ready'); window.speechSynthesis.cancel(); }} className="w-full py-6 text-white/20 text-[9px] uppercase font-black tracking-[0.6em] hover:text-red-500 transition-all">[ Reset ]</button>
+            <button onClick={() => { setResult(null); setStatus('ready'); window.speechSynthesis.cancel(); }} className="w-full py-6 text-white/20 text-[9px] uppercase font-black tracking-[0.8em] hover:text-red-500 transition-all active:scale-95">
+              [ Synchronize ]
+            </button>
           </div>
         ) : (
           <div onClick={() => status === 'ready' ? startRecording() : status === 'recording' ? mediaRecorder.current?.stop() : null} className="relative w-full aspect-square flex flex-col items-center justify-center cursor-pointer group">
             <canvas ref={canvasRef} width={600} height={600} className="w-full h-full z-10" />
-            <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-opacity">
-                <p className="text-[10px] font-black uppercase tracking-[1em] text-white">{status === 'ready' ? 'Link' : status === 'recording' ? 'Live' : 'Sync'}</p>
+            <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-all duration-700">
+                <p className="text-[10px] font-black uppercase tracking-[1.2em] text-white">{status === 'ready' ? 'Initialize' : status === 'recording' ? 'Acquiring' : 'Thinking'}</p>
+                <div className={`h-[1px] bg-red-600 mt-4 transition-all duration-1000 ${status === 'recording' ? 'w-32 opacity-100' : 'w-8 opacity-40'}`} />
             </div>
           </div>
         )}
       </main>
 
       <footer className="py-8 text-center opacity-10">
-        <p className="text-[9px] font-black tracking-[0.8em] uppercase text-white">© Istratius</p>
+        <p className="text-[9px] font-black tracking-[0.8em] uppercase text-white">© Istratius System</p>
       </footer>
     </div>
   );
