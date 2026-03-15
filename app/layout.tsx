@@ -12,6 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+<<<<<<< HEAD
 export const metadata = {
   title: 'ECHO Istratius',
   description: 'Adaptive AI Collaborator',
@@ -19,12 +20,19 @@ export const metadata = {
   icons: {
     apple: '/icon-512.png',
   },
+=======
+export const metadata: Metadata = {
+  title: "ECHO Istratius",
+  description: "Quantum AI Interface",
+  manifest: "/manifest.json",
+>>>>>>> 738e687ba0f896e181189891d17bfbc3adee22f5
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'ECHO',
   },
 };
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,9 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>
     </html>
