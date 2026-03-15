@@ -21,10 +21,10 @@ export default function EchoContent() {
     if (!audioContext.current) return;
     const osc = audioContext.current.createOscillator();
     const gain = audioContext.current.createGain();
-    osc.type = 'square';
+    osc.type = 'sine';
     osc.frequency.setValueAtTime(1000, audioContext.current.currentTime);
     osc.frequency.exponentialRampToValueAtTime(10, audioContext.current.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.03, audioContext.current.currentTime);
+    gain.gain.setValueAtTime(0.02, audioContext.current.currentTime);
     gain.gain.linearRampToValueAtTime(0, audioContext.current.currentTime + 0.1);
     osc.connect(gain);
     gain.connect(audioContext.current.destination);
@@ -34,17 +34,17 @@ export default function EchoContent() {
 
   const initParticles = useCallback(() => {
     particles.current = [];
-    for (let i = 0; i < 450; i++) {
+    for (let i = 0; i < 500; i++) {
       const angle = Math.random() * Math.PI * 2;
       particles.current.push({
         angle, 
-        baseDist: Math.random() * 60 + 20, 
+        baseDist: Math.random() * 55 + 20, 
         x: 0, y: 0,
-        opacity: Math.random() * 0.7 + 0.1,
-        size: Math.random() * 1.5 + 0.5,
-        color: i % 12 === 0 ? '#ffffff' : '#ff0000',
-        vx: (Math.random() - 0.5) * 8, 
-        vy: (Math.random() - 0.5) * 8
+        opacity: Math.random() * 0.7 + 0.15,
+        size: Math.random() * 1.6 + 0.6,
+        color: i % 15 === 0 ? '#ffffff' : '#ff0000',
+        vx: 0, vy: 0,
+        z: Math.random() * 2, // Глубина для спирали
       });
     }
   }, []);
@@ -55,7 +55,7 @@ export default function EchoContent() {
     if (!isVoiceEnabled || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.2; 
+    utterance.rate = 1.25; 
     utterance.pitch = 0.8; 
     window.speechSynthesis.speak(utterance);
   };
@@ -75,27 +75,40 @@ export default function EchoContent() {
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) { sum += Math.abs(dataArray[i] - 128); }
         const currentVolume = sum / dataArray.length;
-        smoothedVolume = smoothedVolume + (currentVolume - smoothedVolume) * 0.25;
+        smoothedVolume = smoothedVolume + (currentVolume - smoothedVolume) * 0.2;
       }
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
 
       particles.current.forEach((p) => {
-        p.vx += (Math.random() - 0.5) * 1.5;
-        p.vy += (Math.random() - 0.5) * 1.5;
-        p.vx *= 0.96; p.vy *= 0.96;
+        // ПРЕМИАЛЬНОЕ ДВИЖЕНИЕ: Плавная, инертная спираль
+        p.vx += (Math.random() - 0.5) * 0.8;
+        p.vy += (Math.random() - 0.5) * 0.8;
+        p.vx *= 0.98; // Меньше трения, больше инерции
+        p.vy *= 0.98;
 
-        const volEffect = status === 'recording' ? (smoothedVolume * 7) : 2;
-        const targetDist = p.baseDist + volEffect;
+        const volEffect = status === 'recording' ? (smoothedVolume * 7) : 1;
         
-        p.x += (Math.cos(p.angle) * targetDist - p.x) * 0.1 + p.vx;
-        p.y += (Math.sin(p.angle) * targetDist - p.y) * 0.1 + p.vy;
-        p.angle += (status === 'thinking' ? 0.15 : 0.01) + (smoothedVolume / 400);
+        // Спиральное притяжение с затуханием к краю
+        const currentDist = p.baseDist + volEffect + Math.sin(p.z + smoothedVolume/50)*10;
+        const targetX = Math.cos(p.angle) * currentDist + Math.sin(p.angle + currentDist/20)*15;
+        const targetY = Math.sin(p.angle) * currentDist + Math.cos(p.angle + currentDist/20)*15;
+        
+        p.x += (targetX - p.x) * 0.08 + p.vx;
+        p.y += (targetY - p.y) * 0.08 + p.vy;
+        
+        // Различная скорость вращения для эффекта глубины
+        p.angle += (0.01 + p.z/50 + smoothedVolume / 500) * (status === 'thinking' ? 10 : 1);
+        p.z += 0.01; // Плавное движение по спирали внутрь/наружу
 
         ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.opacity;
+        
+        // Динамическая прозрачность: вспышки от звука, затухание от центра
+        const distRatio = Math.sqrt(p.x * p.x + p.y * p.y) / 90;
+        ctx.globalAlpha = Math.max(0.1, p.opacity * (1 - distRatio) + smoothedVolume/80);
+        
         ctx.fillRect(centerX + p.x, centerY + p.y, p.size, p.size);
       });
     };
@@ -105,6 +118,7 @@ export default function EchoContent() {
 
   const startRecording = async () => {
     setError(null);
+    window.speechSynthesis?.cancel();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -142,11 +156,12 @@ export default function EchoContent() {
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
-          temperature: 0.1,
+          temperature: 0.1, // Максимальная стабильность
           messages: [
             { 
               role: "system", 
-              content: "Respond in user's language. Use 2 lines only. Line 1: Clear summary of user's request. Line 2: Specific advice or response. No extra text." 
+              content: "Use user's language. Provide a professional summary and advice. " +
+                       "FORMAT: You must combine analysis and directive in ONE line using these strict anchors: [A: Analysis text] [D: Directive text]. No conversional text." 
             }, 
             { role: "user", content: tData.text }
           ]
@@ -155,13 +170,16 @@ export default function EchoContent() {
       const cData = await cRes.json();
       const aiResponse = cData.choices[0].message.content.trim();
       
-      const lines = aiResponse.split('\n').filter(l => l.trim().length > 0);
-      const essence = lines[0] || "Processing complete.";
-      const action = lines[1] || "System operational.";
+      // СТРУКТУРНЫЙ ЯКОРЬ: Жесткий парсинг по якорям [A:] и [D:]
+      const analysisPart = aiResponse.match(/\[A:(.*?)\]/s)?.[1] || aiResponse;
+      const directivePart = aiResponse.match(/\[D:(.*?)\]/s)?.[1] || "Execution protocol standard.";
       
-      setResult({ essence, action });
+      setResult({ 
+        essence: analysisPart.trim(), 
+        action: directivePart.trim() 
+      });
       setStatus('done');
-      speak(action);
+      speak(directivePart.trim());
     } catch (err) { setError("Sync error"); setStatus('ready'); }
   };
 
@@ -179,31 +197,33 @@ export default function EchoContent() {
 
       <main className="flex-1 w-full max-w-md flex flex-col justify-center items-center relative">
         {status === 'done' && result ? (
-          <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
+          <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
              <div className="bg-white/5 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-sm">
-              <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold italic">Analysis</h2>
-              <p className="text-xl font-light leading-relaxed">{result.essence}</p>
+              <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold italic">Deep Analysis</h2>
+              <p className="text-lg font-light leading-relaxed">{result.essence}</p>
             </div>
-            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[2.5rem] backdrop-blur-md">
+            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[2.5rem] backdrop-blur-md relative overflow-hidden">
               <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold italic">Directive</h2>
-              <p className="text-xl font-light text-red-50 leading-relaxed">{result.action}</p>
+              <p className="text-lg font-light text-red-50 leading-relaxed">{result.action}</p>
+              {isVoiceEnabled && <div className="absolute inset-0 bg-red-600/10 animate-pulse pointer-events-none" />}
             </div>
-            <button onClick={() => { setResult(null); setStatus('ready'); }} className="w-full py-6 text-white/20 text-[9px] uppercase tracking-[0.6em] font-bold hover:text-red-500 transition-all">
-              [ Re-Sync ]
+            <button onClick={() => { setResult(null); setStatus('ready'); }} className="w-full py-6 text-white/20 text-[9px] uppercase tracking-[0.8em] font-bold hover:text-red-500 transition-all active:scale-95">
+              [ Synchronize ]
             </button>
           </div>
         ) : (
           <div onClick={() => status === 'ready' ? startRecording() : status === 'recording' ? mediaRecorder.current?.stop() : null} className="relative w-full aspect-square flex flex-col items-center justify-center cursor-pointer group">
             <canvas ref={canvasRef} width={600} height={600} className="w-full h-full z-10" />
-            <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-all duration-500">
+            <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-all duration-700">
                 <p className="text-[10px] font-black uppercase tracking-[1em] text-white">{status === 'ready' ? 'Link' : status === 'recording' ? 'Live' : 'Think'}</p>
+                <div className={`h-[1px] bg-red-600 mt-4 transition-all duration-1000 ${status === 'recording' ? 'w-32 opacity-100' : 'w-8 opacity-40'}`} />
             </div>
           </div>
         )}
       </main>
 
       <footer className="py-8 text-center opacity-20">
-        <p className="text-[10px] font-black tracking-[0.6em] uppercase text-white">© Istratius</p>
+        <p className="text-[10px] font-black tracking-[0.6em] uppercase text-white">© Istratius System</p>
       </footer>
     </div>
   );
