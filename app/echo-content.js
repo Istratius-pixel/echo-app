@@ -58,7 +58,6 @@ export default function EchoContent() {
 
     window.speechSynthesis.speak(utterance);
     
-    // Эффект призрачного эха
     setTimeout(() => {
         if (isVoiceEnabled) {
             const echo = new SpeechSynthesisUtterance(text);
@@ -153,30 +152,31 @@ export default function EchoContent() {
           messages: [
             { 
               role: "system", 
-              content: "You are the ECHO intelligence core. Your mission is to provide profound, sophisticated analysis. " +
-                       "1. Detect the user's language and respond EXCLUSIVELY in that language. " +
-                       "2. Format: [Analysis] <Deep insight about the user's thought, ~15 words>. " +
-                       "3. Format: [Directive] <Meaningful, high-level strategic advice, ~20 words>. " +
-                       "Avoid simple greetings. Be authoritative and cryptic." 
+              content: "You are the ECHO neural interface. " +
+                       "STEP 1: Detect the language of the user input. " +
+                       "STEP 2: Provide a response in that SAME language. " +
+                       "FORMAT: You must provide exactly two paragraphs. " +
+                       "Paragraph 1 must start with 'ANALYSIS:' followed by a sharp strategic insight (2 sentences). " +
+                       "Paragraph 2 must start with 'DIRECTIVE:' followed by a clear action or command (1 sentence). " +
+                       "Be authoritative, cold, and efficient. No greetings." 
             }, 
             { role: "user", content: tData.text }
           ],
-          temperature: 0.5
+          temperature: 0.4
         })
       });
       const cData = await cRes.json();
-      const ai = cData.choices[0].message.content;
+      const aiResponse = cData.choices[0].message.content;
       
-      // Более надежный парсинг
-      const essence = ai.match(/Analysis\](.*?)\[/s)?.[1] || ai.split('[Directive]')[0].replace('[Analysis]', '');
-      const action = ai.split('[Directive]')[1] || "Awaiting further synchronization.";
+      const analysisPart = aiResponse.split(/DIRECTIVE:/i)[0].replace(/ANALYSIS:/i, '').trim();
+      const directivePart = aiResponse.split(/DIRECTIVE:/i)[1]?.trim() || "Stand by for further synchronization.";
       
       setResult({ 
-        essence: essence.trim(), 
-        action: action.trim() 
+        essence: analysisPart, 
+        action: directivePart 
       });
       setStatus('done');
-      speak(action.trim());
+      speak(directivePart);
     } catch (err) { setError("System Synapse Failure"); setStatus('ready'); }
   };
 
