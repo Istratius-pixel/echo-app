@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Zap } from 'lucide-react';
+import { Zap, Volume2, VolumeX } from 'lucide-react';
 
 export default function EchoContent() {
   const [status, setStatus] = useState('ready'); 
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
 
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
@@ -16,7 +17,6 @@ export default function EchoContent() {
   const animationFrameId = useRef(null);
   const particles = useRef([]);
 
-  // --- НАСТРОЙКИ ХАОСА ---
   const PARTICLE_COUNT = 450;
   const CORE_COLOR = '#ff0000';
   const WHITE_SPARK = '#ffffff';
@@ -43,6 +43,16 @@ export default function EchoContent() {
 
   useEffect(() => { initParticles(); }, [initParticles]);
 
+  const speak = (text) => {
+    if (!isVoiceEnabled || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    // Автоматическое определение языка браузером или использование языка ответа
+    utterance.rate = 1.2;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  };
+
   useEffect(() => {
     if (!canvasRef.current || (status !== 'recording' && status !== 'ready' && status !== 'thinking')) return;
     const canvas = canvasRef.current;
@@ -50,10 +60,8 @@ export default function EchoContent() {
     if (!ctx) return;
 
     let smoothedVolume = 0;
-
     const drawParticles = () => {
       animationFrameId.current = requestAnimationFrame(drawParticles);
-      
       if (analyser.current) {
         const dataArray = new Uint8Array(analyser.current.frequencyBinCount);
         analyser.current.getByteTimeDomainData(dataArray);
@@ -62,51 +70,34 @@ export default function EchoContent() {
         const currentVolume = sum / dataArray.length;
         smoothedVolume = smoothedVolume + (currentVolume - smoothedVolume) * 0.3;
       }
-
       ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
-
-      if (status === 'recording' || status === 'thinking') {
-          const glowSize = (status === 'thinking' ? 100 : smoothedVolume * 4);
-          const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowSize);
-          gradient.addColorStop(0, 'rgba(150, 0, 0, 0.15)');
-          gradient.addColorStop(1, 'transparent');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
 
       particles.current.forEach((p) => {
         p.vx += (Math.random() - 0.5) * HAX_DRIFT;
         p.vy += (Math.random() - 0.5) * HAX_DRIFT;
-        p.vx *= 0.95;
-        p.vy *= 0.95;
-
+        p.vx *= 0.95; p.vy *= 0.95;
         const volEffect = status === 'recording' ? (smoothedVolume * SENSITIVITY) : 2;
         const targetDist = p.baseDist + volEffect;
-        
         const targetX = Math.cos(p.angle) * targetDist;
         const targetY = Math.sin(p.angle) * targetDist;
-        
         p.x += (targetX - p.x) * 0.15 + p.vx;
         p.y += (targetY - p.y) * 0.15 + p.vy;
-        
         p.angle += (status === 'thinking' ? 0.1 : 0.008) + (smoothedVolume / 400);
-
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.opacity;
         ctx.fillRect(centerX + p.x, centerY + p.y, p.size, p.size);
       });
     };
-
     drawParticles();
     return () => { if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current); };
   }, [status]);
 
   const startRecording = async () => {
     setError(null);
+    window.speechSynthesis?.cancel();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -142,16 +133,23 @@ export default function EchoContent() {
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
-          messages: [{ role: "system", content: "Short essence and action. 1. СУТЬ. 2. ДЕЙСТВИЕ." }, { role: "user", content: tData.text }]
+          messages: [
+            { 
+              role: "system", 
+              content: "Ты — ядро ECHO. Отвечай на языке пользователя. Формат: 1. [СУТЬ] (макс. 5 слов) 2. [ДЕЙСТВИЕ] (конкретная директива). Никакой воды и приветствий." 
+            }, 
+            { role: "user", content: tData.text }
+          ]
         })
       });
       const cData = await cRes.json();
       const ai = cData.choices[0].message.content;
-      setResult({
-        essence: ai.split('2.')[0].replace('1.', '').trim(),
-        action: ai.split('2.')[1]?.trim() || "Proceed."
-      });
+      const essence = ai.split('2.')[0].replace('1.', '').trim();
+      const action = ai.split('2.')[1]?.trim() || "Standing by.";
+      
+      setResult({ essence, action });
       setStatus('done');
+      speak(action);
     } catch (err) { setError("AI Error"); setStatus('ready'); }
   };
 
@@ -159,7 +157,15 @@ export default function EchoContent() {
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-between p-6 font-sans select-none overflow-hidden">
       <header className="w-full max-w-md flex justify-between items-center py-6">
         <h1 className="text-2xl font-black italic tracking-tighter opacity-80">ECHO <Zap size={18} className="inline text-red-600 fill-red-600" /></h1>
-        <div className="text-[9px] text-red-500/50 border border-red-950 px-2 py-0.5 rounded uppercase tracking-[0.2em]">Core active</div>
+        <button 
+          onClick={() => {
+            setIsVoiceEnabled(!isVoiceEnabled);
+            if (isVoiceEnabled) window.speechSynthesis.cancel();
+          }}
+          className={`p-2 rounded-full border transition-all ${isVoiceEnabled ? 'border-red-600 text-red-600 bg-red-600/10' : 'border-white/10 text-white/20'}`}
+        >
+          {isVoiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+        </button>
       </header>
 
       <main className="flex-1 w-full max-w-md flex flex-col justify-center items-center relative">
@@ -171,12 +177,12 @@ export default function EchoContent() {
               <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold">Essence</h2>
               <p className="text-xl font-light leading-relaxed">{result.essence}</p>
             </div>
-            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem]">
+            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem] relative">
               <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold">Action</h2>
               <p className="text-xl font-light leading-relaxed text-red-50/90">{result.action}</p>
             </div>
             <button 
-              onClick={() => { setResult(null); setStatus('ready'); }} 
+              onClick={() => { setResult(null); setStatus('ready'); window.speechSynthesis.cancel(); }} 
               className="w-full py-6 text-white/20 text-[9px] uppercase font-black tracking-[0.6em] hover:text-red-500 transition-all"
             >
               [ New Session ]
@@ -189,7 +195,7 @@ export default function EchoContent() {
           >
             <canvas ref={canvasRef} width={600} height={600} className="w-full h-full z-10" />
             <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-opacity duration-1000">
-                <p className="text-[10px] font-black uppercase tracking-[1em] text-white pointer-events-none">
+                <p className="text-[10px] font-black uppercase tracking-[1em] text-white pointer-events-none text-center">
                     {status === 'ready' ? 'Tap to initialize' : status === 'recording' ? 'Tap to finalize' : 'Processing...'}
                 </p>
                 <div className={`h-[1px] w-8 bg-red-600 mt-2 transition-all duration-500 ${status === 'recording' ? 'w-24' : 'w-8'}`} />
