@@ -17,17 +17,16 @@ export default function EchoContent() {
   const animationFrameId = useRef(null);
   const particles = useRef([]);
 
+  // Конфигурация эффектов
   const PARTICLE_COUNT = 450;
   const CORE_COLOR = '#ff0000';
   const WHITE_SPARK = '#ffffff';
-  const SENSITIVITY = 6.5; 
-  const HAX_DRIFT = 2.2; 
 
   const playClickSound = () => {
     if (!audioContext.current) return;
     const osc = audioContext.current.createOscillator();
     const gain = audioContext.current.createGain();
-    osc.type = 'square'; 
+    osc.type = 'square';
     osc.frequency.setValueAtTime(1800, audioContext.current.currentTime);
     osc.frequency.exponentialRampToValueAtTime(10, audioContext.current.currentTime + 0.08);
     gain.gain.setValueAtTime(0.04, audioContext.current.currentTime);
@@ -43,27 +42,43 @@ export default function EchoContent() {
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const angle = Math.random() * Math.PI * 2;
       particles.current.push({
-        angle: angle,
-        baseDist: Math.random() * 60 + 20, 
-        x: 0, y: 0,
+        angle, baseDist: Math.random() * 60 + 20, x: 0, y: 0,
         opacity: Math.random() * 0.7 + 0.1,
         size: 0.5 + Math.random() * 1.2,
         color: i % 10 === 0 ? WHITE_SPARK : CORE_COLOR,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10
+        vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10
       });
     }
   }, []);
 
   useEffect(() => { initParticles(); }, [initParticles]);
 
+  // СИСТЕМА ЭХО И ГОЛОСА
   const speak = (text) => {
     if (!isVoiceEnabled || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.7; 
-    utterance.pitch = 0.7; 
-    window.speechSynthesis.speak(utterance);
+    utterance.rate = 1.4; 
+    utterance.pitch = 0.65; // Глубокий кибер-голос
+
+    // Создаем эхо через Web Audio API
+    if (audioContext.current) {
+        // Мы используем захват аудиопотока браузера (если поддерживается)
+        // Но проще всего имитировать эхо через двойной запуск с задержкой
+        window.speechSynthesis.speak(utterance);
+        
+        // Второе "призрачное" сообщение для создания эффекта эха
+        setTimeout(() => {
+            if (isVoiceEnabled) {
+                const echo = new SpeechSynthesisUtterance(text);
+                echo.rate = 1.4;
+                echo.pitch = 0.5;
+                echo.volume = 0.2; // Эхо тише
+                window.speechSynthesis.speak(echo);
+            }
+        }, 180); // Задержка эха
+    }
   };
 
   useEffect(() => {
@@ -89,14 +104,14 @@ export default function EchoContent() {
       const centerY = canvas.height / 2;
 
       particles.current.forEach((p) => {
-        p.vx += (Math.random() - 0.5) * HAX_DRIFT;
-        p.vy += (Math.random() - 0.5) * HAX_DRIFT;
+        p.vx += (Math.random() - 0.5) * 2.2;
+        p.vy += (Math.random() - 0.5) * 2.2;
         p.vx *= 0.95; p.vy *= 0.95;
-        const volEffect = status === 'recording' ? (smoothedVolume * SENSITIVITY) : 2;
+        const volEffect = status === 'recording' ? (smoothedVolume * 6.5) : 2;
         const targetDist = p.baseDist + volEffect;
         p.x += (Math.cos(p.angle) * targetDist - p.x) * 0.15 + p.vx;
         p.y += (Math.sin(p.angle) * targetDist - p.y) * 0.15 + p.vy;
-        p.angle += (status === 'thinking' ? 0.18 : 0.008) + (smoothedVolume / 300);
+        p.angle += (status === 'thinking' ? 0.2 : 0.008) + (smoothedVolume / 300);
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.opacity;
         ctx.fillRect(centerX + p.x, centerY + p.y, p.size, p.size);
@@ -126,7 +141,7 @@ export default function EchoContent() {
       };
       mediaRecorder.current.start();
       setStatus('recording');
-    } catch (err) { setError("Mic access denied"); }
+    } catch (err) { setError("Mic Error"); }
   };
 
   const sendToAI = async (blob) => {
@@ -149,16 +164,11 @@ export default function EchoContent() {
           messages: [
             { 
               role: "system", 
-              content: `You are ECHO core. 
-              RULE: Use ONLY the same language as the user input for all fields. 
-              Output format:
-              1. [Analysis] (5 words max)
-              2. [Directive] (10 words max)
-              No conversational filler.` 
+              content: "You are ECHO core. Use ONLY the user's language. 1. [Analysis] (max 5 words) 2. [Directive] (max 10 words). Strict format." 
             }, 
             { role: "user", content: tData.text }
           ],
-          temperature: 0.2
+          temperature: 0.1
         })
       });
       const cData = await cRes.json();
@@ -171,7 +181,7 @@ export default function EchoContent() {
       setResult({ essence, action });
       setStatus('done');
       speak(action);
-    } catch (err) { setError("AI Offline"); setStatus('ready'); }
+    } catch (err) { setError("Offline"); setStatus('ready'); }
   };
 
   return (
@@ -190,37 +200,24 @@ export default function EchoContent() {
       </header>
 
       <main className="flex-1 w-full max-w-md flex flex-col justify-center items-center relative">
-        {error && <div className="text-red-600 text-[10px] uppercase tracking-widest mb-4 font-bold">{error}</div>}
-
         {status === 'done' && result ? (
           <div className="w-full space-y-6 animate-in fade-in zoom-in duration-500">
-             <div className="bg-red-950/10 border border-white/5 p-8 rounded-[3rem] shadow-[0_0_30px_rgba(255,0,0,0.05)]">
+             <div className="bg-red-950/10 border border-white/5 p-8 rounded-[3rem]">
               <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold">Analysis</h2>
-              <p className="text-xl font-light tracking-tight">{result.essence}</p>
+              <p className="text-xl font-light">{result.essence}</p>
             </div>
-            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem] relative shadow-[0_0_40px_rgba(255,0,0,0.1)]">
+            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem] relative overflow-hidden">
               <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold">Directive</h2>
-              <p className="text-xl font-light text-red-50/90 tracking-tight">{result.action}</p>
-              {isVoiceEnabled && <div className="absolute right-8 top-8 animate-ping h-1.5 w-1.5 rounded-full bg-red-600/50" />}
+              <p className="text-xl font-light text-red-50/90">{result.action}</p>
+              {isVoiceEnabled && <div className="absolute inset-0 bg-red-600/5 animate-pulse" />}
             </div>
-            <button 
-              onClick={() => { setResult(null); setStatus('ready'); window.speechSynthesis.cancel(); }} 
-              className="w-full py-6 text-white/20 text-[9px] uppercase font-black tracking-[0.6em] hover:text-red-500 transition-all"
-            >
-              [ Re-Initialize ]
-            </button>
+            <button onClick={() => { setResult(null); setStatus('ready'); window.speechSynthesis.cancel(); }} className="w-full py-6 text-white/20 text-[9px] uppercase font-black tracking-[0.6em] hover:text-red-500 transition-all">[ Reset ]</button>
           </div>
         ) : (
-          <div 
-            onClick={() => status === 'ready' ? startRecording() : status === 'recording' ? mediaRecorder.current?.stop() : null} 
-            className="relative w-full aspect-square flex flex-col items-center justify-center cursor-pointer group"
-          >
+          <div onClick={() => status === 'ready' ? startRecording() : status === 'recording' ? mediaRecorder.current?.stop() : null} className="relative w-full aspect-square flex flex-col items-center justify-center cursor-pointer group">
             <canvas ref={canvasRef} width={600} height={600} className="w-full h-full z-10" />
-            <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-opacity duration-1000">
-                <p className="text-[10px] font-black uppercase tracking-[1em] text-white pointer-events-none text-center">
-                    {status === 'ready' ? 'Access' : status === 'recording' ? 'Acquire' : 'Synapse'}
-                </p>
-                <div className={`h-[1px] w-8 bg-red-600 mt-2 transition-all duration-500 ${status === 'recording' ? 'w-24' : 'w-8'}`} />
+            <div className="absolute bottom-10 z-20 flex flex-col items-center opacity-20 group-hover:opacity-60 transition-opacity">
+                <p className="text-[10px] font-black uppercase tracking-[1em] text-white">{status === 'ready' ? 'Link' : status === 'recording' ? 'Live' : 'Sync'}</p>
             </div>
           </div>
         )}
