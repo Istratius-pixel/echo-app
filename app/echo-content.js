@@ -23,6 +23,22 @@ export default function EchoContent() {
   const SENSITIVITY = 6.5; 
   const HAX_DRIFT = 2.2; 
 
+  // Футуристичный звук клика
+  const playClickSound = () => {
+    if (!audioContext.current) return;
+    const osc = audioContext.current.createOscillator();
+    const gain = audioContext.current.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, audioContext.current.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(110, audioContext.current.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.1, audioContext.current.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.current.currentTime + 0.1);
+    osc.connect(gain);
+    gain.connect(audioContext.current.destination);
+    osc.start();
+    osc.stop(audioContext.current.currentTime + 0.1);
+  };
+
   const initParticles = useCallback(() => {
     particles.current = [];
     for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -47,9 +63,8 @@ export default function EchoContent() {
     if (!isVoiceEnabled || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    // Автоматическое определение языка браузером или использование языка ответа
-    utterance.rate = 1.2;
-    utterance.pitch = 1.0;
+    utterance.rate = 1.3;
+    utterance.pitch = 0.9; // Чуть более низкий, "системный" голос
     window.speechSynthesis.speak(utterance);
   };
 
@@ -85,7 +100,7 @@ export default function EchoContent() {
         const targetY = Math.sin(p.angle) * targetDist;
         p.x += (targetX - p.x) * 0.15 + p.vx;
         p.y += (targetY - p.y) * 0.15 + p.vy;
-        p.angle += (status === 'thinking' ? 0.1 : 0.008) + (smoothedVolume / 400);
+        p.angle += (status === 'thinking' ? 0.12 : 0.008) + (smoothedVolume / 350);
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.opacity;
         ctx.fillRect(centerX + p.x, centerY + p.y, p.size, p.size);
@@ -101,6 +116,7 @@ export default function EchoContent() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
+      playClickSound();
       const source = audioContext.current.createMediaStreamSource(stream);
       analyser.current = audioContext.current.createAnalyser();
       source.connect(analyser.current);
@@ -128,24 +144,28 @@ export default function EchoContent() {
         method: "POST", headers: { "Authorization": `Bearer ${apiKey}` }, body: formData
       });
       const tData = await tRes.json();
+      
       const cRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "llama-3.1-8b-instant", // Сверхбыстрая модель
           messages: [
             { 
               role: "system", 
-              content: "Ты — ядро ECHO. Отвечай на языке пользователя. Формат: 1. [СУТЬ] (макс. 5 слов) 2. [ДЕЙСТВИЕ] (конкретная директива). Никакой воды и приветствий." 
+              content: "Ты — ядро ECHO. Отвечай СТРОГО на том же языке, на котором говорит пользователь. Формат: 1. [СУТЬ] (макс. 5 слов) 2. [ДЕЙСТВИЕ] (короткая директива). Без приветствий." 
             }, 
             { role: "user", content: tData.text }
-          ]
+          ],
+          temperature: 0.5
         })
       });
       const cData = await cRes.json();
       const ai = cData.choices[0].message.content;
-      const essence = ai.split('2.')[0].replace('1.', '').trim();
-      const action = ai.split('2.')[1]?.trim() || "Standing by.";
+      
+      const parts = ai.includes('2.') ? ai.split('2.') : [ai, "Standing by."];
+      const essence = parts[0].replace('1.', '').trim();
+      const action = parts[1]?.trim() || "Standing by.";
       
       setResult({ essence, action });
       setStatus('done');
@@ -175,11 +195,11 @@ export default function EchoContent() {
           <div className="w-full space-y-6 animate-in fade-in zoom-in duration-500">
              <div className="bg-red-950/10 border border-white/5 p-8 rounded-[3rem]">
               <h2 className="text-[9px] text-white/20 uppercase mb-4 tracking-[0.3em] font-bold">Essence</h2>
-              <p className="text-xl font-light leading-relaxed">{result.essence}</p>
+              <p className="text-xl font-light">{result.essence}</p>
             </div>
-            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem] relative">
+            <div className="bg-red-600/5 border border-red-500/20 p-8 rounded-[3rem]">
               <h2 className="text-[9px] text-red-500 uppercase mb-4 tracking-[0.3em] font-bold">Action</h2>
-              <p className="text-xl font-light leading-relaxed text-red-50/90">{result.action}</p>
+              <p className="text-xl font-light text-red-50/90">{result.action}</p>
             </div>
             <button 
               onClick={() => { setResult(null); setStatus('ready'); window.speechSynthesis.cancel(); }} 
